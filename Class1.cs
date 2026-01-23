@@ -3,12 +3,13 @@ using HarmonyLib;
 using UnityEngine;
 using UnityEngine.UI;
 using System.Collections.Generic;
+using System.Collections;
 using System.Linq;
 using System;
 
 namespace ValheimMod
 {
-    [BepInPlugin("com.VerdoxOP.valheim-modmenu", "Valheim ModMenu", "4.9.0")]
+    [BepInPlugin("com.VerdoxOP.valheim-modmenu", "Valheim ModMenu", "6.7.0")]
     [BepInProcess("valheim.exe")]
     public class ValheimModMenu : BaseUnityPlugin
     {
@@ -23,6 +24,7 @@ namespace ValheimMod
         // --- TOGGLES ---
         public bool isGodMode = false;
         public bool isInfStamina = false;
+        public bool isInfEitr = false;
         public bool isNoCostBuild = false;
         public bool isFlightMode = false;
         public bool isSuperStats = false;
@@ -34,6 +36,19 @@ namespace ValheimMod
         public bool isGhost = false;
         public bool isWaterWalk = false;
         public bool isFastProcess = false;
+        public bool isForceTeleport = false;
+        public bool isNoFallDamage = false;
+        public bool isInfStability = false;
+        public bool isAlwaysRested = false;
+        public bool isInfJump = false;
+        public bool isSuperBoat = false;
+        public bool isSuperExplore = false;
+        public bool isXpMultiplier = false;
+
+        // --- TIME & AMMO ---
+        public bool isInfAmmo = false;
+        public bool isTimeFrozen = false;
+        public float timeOfDay = 0.5f;
 
         public Dictionary<string, bool> activeBossPowers = new Dictionary<string, bool>()
         {
@@ -48,6 +63,9 @@ namespace ValheimMod
         public bool isMagicBullet = false;
         public bool isRapidAttack = false;
         public bool isEsp = false;
+        public float espRange = 200f;
+        public bool isTargetAll = false;
+
         public Dictionary<string, bool> espFilters = new Dictionary<string, bool>();
         private Vector2 espScrollPos;
         private bool espListPopulated = false;
@@ -78,6 +96,7 @@ namespace ValheimMod
 
         private Vector2 scrollPosition;
         private Vector2 skillScrollPosition;
+        private Vector2 worldScrollPosition;
         private Dictionary<Skills.SkillType, Skills.Skill> cachedSkills = new Dictionary<Skills.SkillType, Skills.Skill>();
 
         void Awake()
@@ -123,6 +142,17 @@ namespace ValheimMod
                 foreach (var b in behaviours) { if (b.GetType().Name.Contains("PostProcessLayer")) b.enabled = true; }
             }
 
+            // --- TIME CONTROL ---
+            if (isTimeFrozen && EnvMan.instance != null)
+            {
+                EnvMan.instance.m_debugTimeOfDay = true;
+                EnvMan.instance.m_debugTime = timeOfDay;
+            }
+            else if (!isTimeFrozen && EnvMan.instance != null && EnvMan.instance.m_debugTimeOfDay)
+            {
+                EnvMan.instance.m_debugTimeOfDay = false;
+            }
+
             if (Player.m_localPlayer != null)
             {
                 Player p = Player.m_localPlayer;
@@ -143,6 +173,7 @@ namespace ValheimMod
                 }
 
                 if (isInfStamina) p.AddStamina(p.GetMaxStamina());
+                if (isInfEitr) p.AddEitr(p.GetMaxEitr());
 
                 bool currentNoCost = pTraverse.Field("m_noPlacementCost").GetValue<bool>();
                 if (isNoCostBuild != currentNoCost) pTraverse.Field("m_noPlacementCost").SetValue(isNoCostBuild);
@@ -150,31 +181,85 @@ namespace ValheimMod
                 pTraverse.Field("m_debugFly").SetValue(isFlightMode);
                 pTraverse.Field("m_noclip").SetValue(isFlightMode);
 
-                if (isSuperStats) { p.m_maxCarryWeight = 9999f; p.m_runSpeed = 20f; p.m_jumpForce = 20f; }
-                else { if (p.m_maxCarryWeight > 3000) p.m_maxCarryWeight = 300f; if (p.m_runSpeed > 10) p.m_runSpeed = 7f; }
+                if (isSuperStats)
+                {
+                    p.m_maxCarryWeight = 9999f;
+                    p.m_runSpeed = 20f;
+                    p.m_jumpForce = 20f;
+                }
+                else
+                {
+                    if (p.m_maxCarryWeight > 3000) p.m_maxCarryWeight = 300f;
+                    if (p.m_runSpeed > 10) p.m_runSpeed = 7f;
+                    if (p.m_jumpForce > 10) p.m_jumpForce = 8f;
+                }
 
                 if (isVacuum) p.m_autoPickupRange = 50f;
                 else p.m_autoPickupRange = 2f;
 
                 p.SetGhostMode(isGhost);
 
+                if (isInfJump && Input.GetKeyDown(KeyCode.Space) && !isFlightMode)
+                {
+                    pTraverse.Field("m_lastGroundTouch").SetValue(0f);
+                    p.Jump();
+                }
+
+                if (isSuperBoat)
+                {
+                    Ship ship = p.GetStandingOnShip();
+                    if (ship != null)
+                    {
+                        var sTraverse = Traverse.Create(ship);
+                        // Check if we are driving
+                        bool isDriving = false;
+                        try
+                        {
+                            List<Player> players = sTraverse.Field("m_players").GetValue<List<Player>>();
+                            if (players != null && players.Contains(p)) isDriving = true;
+                        }
+                        catch { }
+
+                        if (isDriving)
+                        {
+                            sTraverse.Field("m_speed").SetValue(30f);
+                            sTraverse.Field("m_backwardForce").SetValue(50f);
+                            sTraverse.Field("m_force").SetValue(50f);
+                            sTraverse.Field("m_rudderSpeed").SetValue(5f);
+                        }
+                    }
+                }
+
+                if (isAlwaysRested)
+                {
+                    SEMan se = p.GetSEMan();
+                    if (!se.HaveStatusEffect("Rested".GetStableHashCode()))
+                    {
+                        StatusEffect rested = ObjectDB.instance.GetStatusEffect("Rested".GetStableHashCode());
+                        if (rested) se.AddStatusEffect(rested);
+                    }
+                    else
+                    {
+                        StatusEffect effect = se.GetStatusEffect("Rested".GetStableHashCode());
+                        if (effect) { effect.m_ttl = 3600f; effect.ResetTime(); }
+                    }
+                }
+
+                if (isNoFallDamage)
+                {
+                    try { pTraverse.Field("m_maxAirAltitude").SetValue(p.transform.position.y); } catch { }
+                }
+
                 if (isWaterWalk && !isFlightMode)
                 {
                     float waterLevel = pTraverse.Field("m_waterLevel").GetValue<float>();
-
                     if (p.transform.position.y < waterLevel && !p.IsSwimming())
                     {
                         Vector3 pos = p.transform.position;
                         pos.y = waterLevel;
                         p.transform.position = pos;
-
                         Rigidbody rb = p.GetComponent<Rigidbody>();
-                        if (rb)
-                        {
-                            Vector3 vel = rb.linearVelocity;
-                            vel.y = 0;
-                            rb.linearVelocity = vel;
-                        }
+                        if (rb) { Vector3 vel = rb.linearVelocity; vel.y = 0; rb.linearVelocity = vel; }
                     }
                 }
 
@@ -190,6 +275,12 @@ namespace ValheimMod
                             }
                         }
                     }
+                }
+
+                if (Minimap.instance != null)
+                {
+                    if (isSuperExplore) Minimap.instance.m_exploreRadius = 500f;
+                    else if (Minimap.instance.m_exploreRadius > 150f) Minimap.instance.m_exploreRadius = 100f;
                 }
 
                 if (isRapidAttack)
@@ -281,6 +372,7 @@ namespace ValheimMod
             GUILayout.BeginHorizontal();
             if (GUILayout.Button(isGodMode ? "God: <color=green>ON</color>" : "God: <color=red>OFF</color>")) isGodMode = !isGodMode;
             if (GUILayout.Button(isInfStamina ? "Stamina: <color=green>ON</color>" : "Stamina: <color=red>OFF</color>")) isInfStamina = !isInfStamina;
+            if (GUILayout.Button(isInfEitr ? "Eitr (Magic): <color=green>ON</color>" : "Eitr (Magic): <color=red>OFF</color>")) isInfEitr = !isInfEitr;
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
             if (GUILayout.Button(isNoCostBuild ? "Build (NoCost/Anywhere): <color=green>ON</color>" : "Build (NoCost/Anywhere): <color=red>OFF</color>")) isNoCostBuild = !isNoCostBuild;
@@ -539,9 +631,77 @@ namespace ValheimMod
             MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, "VerdoxOP: Recipes Restored!");
         }
 
+        // --- FIXED: Mass Repair using GetComponent ---
+        void MassRepairNearby()
+        {
+            if (Player.m_localPlayer == null) return;
+            int repaired = 0;
+
+            // Replaced obsolete FindObjectsOfType with FindObjectsByType
+            foreach (WearNTear w in UnityEngine.Object.FindObjectsByType<WearNTear>(FindObjectsSortMode.None))
+            {
+                if (Vector3.Distance(w.transform.position, Player.m_localPlayer.transform.position) <= 20f)
+                {
+                    // Use GetComponent to get ZNetView instead of direct access
+                    ZNetView nview = w.GetComponent<ZNetView>();
+                    if (nview != null && nview.IsValid())
+                    {
+                        // Check health via ZDO
+                        float currentHealth = nview.GetZDO().GetFloat("health", w.m_health);
+                        if (currentHealth < w.m_health)
+                        {
+                            // Use Traverse to call SetHealth as a backup if method is private
+                            Traverse.Create(w).Method("SetHealth", w.m_health).GetValue();
+                            repaired++;
+                        }
+                    }
+                }
+            }
+            MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"VerdoxOP: Repaired {repaired} pieces!");
+        }
+
+        void KillAllNearby()
+        {
+            if (Player.m_localPlayer == null) return;
+            int killCount = 0;
+            foreach (Character c in Character.GetAllCharacters())
+            {
+                if (c.IsPlayer() || c.IsTamed()) continue;
+                if (Vector3.Distance(c.transform.position, Player.m_localPlayer.transform.position) <= 50f)
+                {
+                    HitData hit = new HitData();
+                    hit.m_damage.m_damage = 99999f;
+                    c.Damage(hit);
+                    killCount++;
+                }
+            }
+            MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"VerdoxOP: Nuked {killCount} enemies!");
+        }
+
+        void HealTamed()
+        {
+            if (Player.m_localPlayer == null) return;
+            int healed = 0;
+            foreach (Character c in Character.GetAllCharacters())
+            {
+                if (c.IsTamed())
+                {
+                    if (c.GetHealth() < c.GetMaxHealth())
+                    {
+                        c.Heal(c.GetMaxHealth(), true);
+                        healed++;
+                    }
+                }
+            }
+            MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"VerdoxOP: Healed {healed} pets!");
+        }
+
         void DrawWorldInterface()
         {
             if (Player.m_localPlayer == null) { GUILayout.Label("Enter world first."); return; }
+
+            worldScrollPosition = GUILayout.BeginScrollView(worldScrollPosition, GUI.skin.box);
+
             GUILayout.Label($"<b>VerdoxOP World Mods</b>");
             if (GUILayout.Button(isSuperStats ? "Super Stats: <color=green>ON</color>" : "Super Stats: <color=red>OFF</color>")) isSuperStats = !isSuperStats;
             if (GUILayout.Button(isInstaMine ? "InstaMine: <color=green>ON</color>" : "InstaMine: <color=red>OFF</color>")) isInstaMine = !isInstaMine;
@@ -553,10 +713,47 @@ namespace ValheimMod
             if (GUILayout.Button(isVacuum ? "Loot Vacuum (50m): <color=green>ON</color>" : "Loot Vacuum (50m): <color=red>OFF</color>")) isVacuum = !isVacuum;
             if (GUILayout.Button(isGhost ? "Ghost Mode (Invisible): <color=green>ON</color>" : "Ghost Mode (Invisible): <color=red>OFF</color>")) isGhost = !isGhost;
             if (GUILayout.Button(isWaterWalk ? "Jesus Mode (Water Walk): <color=green>ON</color>" : "Jesus Mode (Water Walk): <color=red>OFF</color>")) isWaterWalk = !isWaterWalk;
-            // NEW: Fast Process
-            if (GUILayout.Button(isFastProcess ? "Fast Process (Cook/Smelt): <color=green>ON</color>" : "Fast Process (Cook/Smelt): <color=red>OFF</color>")) isFastProcess = !isFastProcess;
+            if (GUILayout.Button(isFastProcess ? "Fast Process (Grow/Cook/Smelt): <color=green>ON</color>" : "Fast Process (Grow/Cook/Smelt): <color=red>OFF</color>")) isFastProcess = !isFastProcess;
+
+            if (GUILayout.Button(isInfStability ? "Infinite Stability (Build Anywhere): <color=green>ON</color>" : "Infinite Stability (Build Anywhere): <color=red>OFF</color>")) isInfStability = !isInfStability;
+            if (GUILayout.Button(isAlwaysRested ? "Always Rested (Max Comfort): <color=green>ON</color>" : "Always Rested (Max Comfort): <color=red>OFF</color>")) isAlwaysRested = !isAlwaysRested;
+
+            if (GUILayout.Button(isInfJump ? "Infinite Jump (Air Jump): <color=green>ON</color>" : "Infinite Jump (Air Jump): <color=red>OFF</color>")) isInfJump = !isInfJump;
+            if (GUILayout.Button(isSuperBoat ? "Super Boat Speed: <color=green>ON</color>" : "Super Boat Speed: <color=red>OFF</color>")) isSuperBoat = !isSuperBoat;
+
+            if (GUILayout.Button(isSuperExplore ? "Super Explore Radius (5x): <color=green>ON</color>" : "Super Explore Radius (5x): <color=red>OFF</color>")) isSuperExplore = !isSuperExplore;
+
+            if (GUILayout.Button(isForceTeleport ? "Force Teleport Items (Ores): <color=green>ON</color>" : "Force Teleport Items (Ores): <color=red>OFF</color>")) isForceTeleport = !isForceTeleport;
+            if (GUILayout.Button(isNoFallDamage ? "No Fall Damage: <color=green>ON</color>" : "No Fall Damage: <color=red>OFF</color>")) isNoFallDamage = !isNoFallDamage;
 
             GUILayout.Space(10);
+
+            if (GUILayout.Button(isTimeFrozen ? $"Time Frozen: <color=green>{GetTimeString()}</color>" : "Freeze Time: <color=red>OFF</color>")) isTimeFrozen = !isTimeFrozen;
+            if (isTimeFrozen)
+            {
+                GUILayout.Label($"Set Time: {GetTimeString()}");
+                timeOfDay = GUILayout.HorizontalSlider(timeOfDay, 0f, 1f);
+            }
+
+            GUILayout.Label("<b>Weather & Raids</b>");
+            GUILayout.BeginHorizontal();
+            // FIXED: Use m_debugEnv
+            if (GUILayout.Button("CLEAR")) { if (EnvMan.instance) EnvMan.instance.m_debugEnv = "Clear"; }
+            if (GUILayout.Button("RAIN")) { if (EnvMan.instance) EnvMan.instance.m_debugEnv = "Rain"; }
+            if (GUILayout.Button("STORM")) { if (EnvMan.instance) EnvMan.instance.m_debugEnv = "ThunderStorm"; }
+            if (GUILayout.Button("SNOW")) { if (EnvMan.instance) EnvMan.instance.m_debugEnv = "Snow"; }
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("RESET WEATHER")) { if (EnvMan.instance) EnvMan.instance.m_debugEnv = ""; }
+            if (GUILayout.Button("STOP RAID")) { if (RandEventSystem.instance) { RandEventSystem.instance.ResetRandomEvent(); MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, "Raid Stopped!"); } }
+            if (GUILayout.Button("START RANDOM RAID")) { if (RandEventSystem.instance) { RandEventSystem.instance.StartRandomEvent(); MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, "Raid Started!"); } }
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(10);
+            if (GUILayout.Button("REPAIR ALL NEARBY (20m)")) MassRepairNearby();
+            if (GUILayout.Button("HEAL ALL TAMED")) HealTamed();
+
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("TELEPORT TO PIN")) TeleportToPin();
             if (GUILayout.Button("TAME ALL NEARBY")) TameNearby();
@@ -603,6 +800,17 @@ namespace ValheimMod
                     MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, "VerdoxOP: All Bosses Defeated!");
                 }
             }
+
+            GUILayout.EndScrollView();
+        }
+
+        string GetTimeString()
+        {
+            if (EnvMan.instance == null) return "??:??";
+            float time = isTimeFrozen ? timeOfDay : (float)EnvMan.instance.m_debugTime;
+            int h = (int)(time * 24);
+            int m = (int)((time * 24 - h) * 60);
+            return $"{h:00}:{m:00}";
         }
 
         void TeleportToPin()
@@ -727,19 +935,35 @@ namespace ValheimMod
             GUILayout.Label("<b>Aimbot by VerdoxOP</b>");
             if (GUILayout.Button(isAimbot ? "Aimbot: <color=green>ON</color>" : "Aimbot: <color=red>OFF</color>")) isAimbot = !isAimbot;
             if (GUILayout.Button(isPredictor ? "Arrow Predictor: <color=green>ON</color>" : "Arrow Predictor: <color=red>OFF</color>")) isPredictor = !isPredictor;
+            if (GUILayout.Button(isTargetAll ? "Target ALL (Ignore Filters): <color=green>ON</color>" : "Target ALL (Ignore Filters): <color=red>OFF</color>")) isTargetAll = !isTargetAll;
+
             GUILayout.BeginHorizontal();
             GUILayout.Label($"FOV: {aimFov:F0}", GUILayout.Width(60));
             aimFov = GUILayout.HorizontalSlider(aimFov, 10f, 360f);
             GUILayout.EndHorizontal();
+
             GUILayout.Label("<b>Weapon Mods</b>");
             if (GUILayout.Button(isMagicBullet ? "Smart Arrow (Homing): <color=green>ON</color>" : "Smart Arrow (Homing): <color=red>OFF</color>")) isMagicBullet = !isMagicBullet;
             if (GUILayout.Button(isRapidAttack ? "Rapid Attack (Bow & Melee): <color=green>ON</color>" : "Rapid Attack (Bow & Melee): <color=red>OFF</color>")) isRapidAttack = !isRapidAttack;
+            // NEW: Infinite Ammo Toggle
+            if (GUILayout.Button(isInfAmmo ? "Infinite Ammo: <color=green>ON</color>" : "Infinite Ammo: <color=red>OFF</color>")) isInfAmmo = !isInfAmmo;
+
+            GUILayout.Space(5);
+            // NEW: NUKE BUTTON
+            if (GUILayout.Button("KILL ALL ENEMIES (50m)")) KillAllNearby();
 
             GUILayout.Space(10);
             GUILayout.Label("<b>ESP</b>");
             if (GUILayout.Button(isEsp ? "Creature ESP: <color=green>ON</color>" : "Creature ESP: <color=red>OFF</color>")) isEsp = !isEsp;
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label($"Range: {espRange:F0}m", GUILayout.Width(80));
+            espRange = GUILayout.HorizontalSlider(espRange, 0f, 500f);
+            GUILayout.EndHorizontal();
+
             if (GUILayout.Button("Select All ESP")) SetAllEsp(true);
             if (GUILayout.Button("Deselect All ESP")) SetAllEsp(false);
+
             GUILayout.Label("<b>Filter List:</b>");
             espScrollPos = GUILayout.BeginScrollView(espScrollPos, GUI.skin.box, GUILayout.Height(300));
             var keys = new List<string>(espFilters.Keys);
@@ -747,53 +971,113 @@ namespace ValheimMod
             foreach (string name in keys) { bool toggled = espFilters[name]; bool newState = GUILayout.Toggle(toggled, name); if (newState != toggled) espFilters[name] = newState; }
             GUILayout.EndScrollView();
         }
+
         void PopulateEspList()
         {
             if (ZNetScene.instance == null) return;
             foreach (GameObject prefab in ZNetScene.instance.m_prefabs)
             {
                 Character c = prefab.GetComponent<Character>();
-                if (c != null && prefab.name != "Player") { if (!espFilters.ContainsKey(prefab.name)) { bool isEnemy = c.m_faction == Character.Faction.Undead || c.m_faction == Character.Faction.Demon || c.m_faction == Character.Faction.PlainsMonsters || c.m_faction == Character.Faction.ForestMonsters; espFilters.Add(prefab.name, isEnemy); } }
+                if (c != null && prefab.name != "Player")
+                {
+                    if (!espFilters.ContainsKey(prefab.name))
+                    {
+                        bool isEnemy = c.m_faction == Character.Faction.Undead || c.m_faction == Character.Faction.Demon || c.m_faction == Character.Faction.PlainsMonsters || c.m_faction == Character.Faction.ForestMonsters;
+                        espFilters.Add(prefab.name, isEnemy);
+                    }
+                }
             }
             espListPopulated = true;
         }
+
         void SetAllEsp(bool state) { var keys = new List<string>(espFilters.Keys); foreach (string key in keys) espFilters[key] = state; }
+
         void DrawEsp()
         {
             foreach (Character c in Character.GetAllCharacters())
             {
                 if (c.IsPlayer() || c.IsDead()) continue;
+
+                float dist = Vector3.Distance(Player.m_localPlayer.transform.position, c.transform.position);
+                if (dist > espRange) continue;
+
                 string name = c.gameObject.name.Replace("(Clone)", "");
-                if (espFilters.ContainsKey(name) && espFilters[name] == true)
+                bool shouldShow = isTargetAll || (espFilters.ContainsKey(name) && espFilters[name] == true);
+
+                if (shouldShow)
                 {
                     Vector3 screenPos = Camera.main.WorldToScreenPoint(c.GetCenterPoint());
-                    if (screenPos.z > 0) { float dist = Vector3.Distance(Player.m_localPlayer.transform.position, c.transform.position); GUI.color = Color.red; GUI.Label(new Rect(screenPos.x - 50, Screen.height - screenPos.y - 25, 100, 50), $"{name} [{dist:F0}m]"); }
+                    if (screenPos.z > 0)
+                    {
+                        GUI.color = Color.red;
+                        GUI.Label(new Rect(screenPos.x - 50, Screen.height - screenPos.y - 25, 100, 50), $"{name} [{dist:F0}m]");
+                    }
                 }
             }
             GUI.color = Color.white;
         }
+
         public Character GetBestTarget()
         {
             Character bestTarget = null; float closestAngle = aimFov; Vector3 camForward = GameCamera.instance.transform.forward; Vector3 camPos = GameCamera.instance.transform.position;
             foreach (Character c in Character.GetAllCharacters())
             {
-                if (c.IsPlayer() || c.IsDead()) continue; if (c.m_faction == Character.Faction.Players) continue;
+                if (c.IsPlayer() || c.IsDead()) continue;
+                if (c.m_faction == Character.Faction.Players) continue;
+
+                string name = c.gameObject.name.Replace("(Clone)", "");
+                if (!isTargetAll)
+                {
+                    if (!espFilters.ContainsKey(name) || espFilters[name] == false) continue;
+                }
+
                 Vector3 dirToTarget = (c.GetCenterPoint() - camPos).normalized; float angle = Vector3.Angle(camForward, dirToTarget); if (angle < closestAngle) { closestAngle = angle; bestTarget = c; }
             }
             return bestTarget;
         }
+
         public static Character GetClosestEnemy(Vector3 pos, float radius)
         {
             Character closest = null; float minDist = radius;
             foreach (Character c in Character.GetAllCharacters())
             {
                 if (c.IsPlayer() || c.IsDead()) continue; if (c.m_faction == Character.Faction.Players) continue;
+
+                if (!ValheimModMenu.context.isTargetAll)
+                {
+                    string name = c.gameObject.name.Replace("(Clone)", "");
+                    if (!ValheimModMenu.context.espFilters.ContainsKey(name) || ValheimModMenu.context.espFilters[name] == false) continue;
+                }
+
                 float dist = Vector3.Distance(pos, c.GetCenterPoint()); if (dist < minDist) { minDist = dist; closest = c; }
             }
             return closest;
         }
+
         void LoadSkills() { if (Player.m_localPlayer == null) return; var skillsObject = Player.m_localPlayer.GetSkills(); var field = Traverse.Create(skillsObject).Field("m_skillData"); cachedSkills = field.GetValue<Dictionary<Skills.SkillType, Skills.Skill>>(); if (cachedSkills == null) cachedSkills = new Dictionary<Skills.SkillType, Skills.Skill>(); }
-        void DrawSkillsInterface() { if (GUILayout.Button("MAX ALL SKILLS (100)")) { foreach (var kvp in cachedSkills) kvp.Value.m_level = 100f; } skillScrollPosition = GUILayout.BeginScrollView(skillScrollPosition, GUI.skin.box); foreach (var kvp in cachedSkills) { GUILayout.BeginHorizontal(); GUILayout.Label($"{kvp.Key} <color=yellow>({kvp.Value.m_level:F0})</color>", GUILayout.Width(180)); if (GUILayout.Button("+1", GUILayout.Width(40))) kvp.Value.m_level = Mathf.Clamp(kvp.Value.m_level + 1, 0, 100); if (GUILayout.Button("MAX", GUILayout.Width(50))) kvp.Value.m_level = 100; GUILayout.EndHorizontal(); } GUILayout.EndScrollView(); }
+
+        void DrawSkillsInterface()
+        {
+            if (GUILayout.Button(isXpMultiplier ? "10x XP Gain: <color=green>ON</color>" : "10x XP Gain: <color=red>OFF</color>")) isXpMultiplier = !isXpMultiplier;
+            GUILayout.Space(5);
+
+            if (GUILayout.Button("MAX ALL SKILLS (100)")) { foreach (var kvp in cachedSkills) kvp.Value.m_level = 100f; }
+            skillScrollPosition = GUILayout.BeginScrollView(skillScrollPosition, GUI.skin.box);
+            foreach (var kvp in cachedSkills)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label($"{kvp.Key} <color=yellow>({kvp.Value.m_level:F0})</color>", GUILayout.Width(180));
+
+                if (GUILayout.Button("-1", GUILayout.Width(35))) kvp.Value.m_level = Mathf.Clamp(kvp.Value.m_level - 1, 0, 100);
+                if (GUILayout.Button("+1", GUILayout.Width(35))) kvp.Value.m_level = Mathf.Clamp(kvp.Value.m_level + 1, 0, 100);
+                if (GUILayout.Button("RESET", GUILayout.Width(50))) kvp.Value.m_level = 0;
+                if (GUILayout.Button("MAX", GUILayout.Width(40))) kvp.Value.m_level = 100;
+
+                GUILayout.EndHorizontal();
+            }
+            GUILayout.EndScrollView();
+        }
+
         private void SpawnObject(string name, int count) { Player player = Player.m_localPlayer; if (player == null || ZNetScene.instance == null) return; GameObject prefab = ZNetScene.instance.GetPrefab(name); if (!prefab) { MessageHud.instance.ShowMessage(MessageHud.MessageType.TopLeft, "Invalid: " + name); return; } Vector3 spawnPos = player.transform.position + player.transform.forward * 2f + Vector3.up; Quaternion spawnRot = player.transform.rotation; ItemDrop itemDrop = prefab.GetComponent<ItemDrop>(); if (itemDrop != null) { GameObject spawned = Instantiate(prefab, spawnPos, spawnRot); spawned.GetComponent<ItemDrop>().m_itemData.m_stack = count; MessageHud.instance.ShowMessage(MessageHud.MessageType.TopLeft, $"Spawned {count}x {name}"); } else { for (int i = 0; i < count; i++) Instantiate(prefab, spawnPos, spawnRot); MessageHud.instance.ShowMessage(MessageHud.MessageType.TopLeft, $"Spawned {count} {name}(s)"); } }
 
         [HarmonyPatch(typeof(Player), "TakeInput")]
@@ -812,7 +1096,59 @@ namespace ValheimMod
             }
         }
 
-        // --- NEW: FIXED FAST PROCESS ---
+        // --- NEW: 10x XP PATCH ---
+        [HarmonyPatch(typeof(Skills), "RaiseSkill")]
+        public static class XpPatch
+        {
+            static void Prefix(ref float factor)
+            {
+                if (ValheimModMenu.context.isXpMultiplier) factor *= 10f;
+            }
+        }
+
+        [HarmonyPatch(typeof(Inventory), "RemoveItem", new Type[] { typeof(ItemDrop.ItemData), typeof(int) })]
+        public static class InfAmmoPatch
+        {
+            static bool Prefix(ItemDrop.ItemData item)
+            {
+                if (ValheimModMenu.context.isInfAmmo && item != null && item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.Ammo)
+                {
+                    return false; // Stop the ammo from being removed
+                }
+                return true;
+            }
+        }
+
+        [HarmonyPatch(typeof(Inventory), "IsTeleportable")]
+        public static class ForceTeleportPatch
+        {
+            static void Postfix(ref bool __result)
+            {
+                if (ValheimModMenu.context.isForceTeleport) __result = true;
+            }
+        }
+
+        [HarmonyPatch(typeof(WearNTear), "GetSupport")]
+        public static class StabilityPatch
+        {
+            static void Postfix(ref float __result)
+            {
+                if (ValheimModMenu.context.isInfStability) __result = 1500f; // Max support
+            }
+        }
+
+        [HarmonyPatch(typeof(Plant), "GetHoverText")]
+        public static class FastPlantPatch
+        {
+            static void Prefix(Plant __instance)
+            {
+                if (ValheimModMenu.context.isFastProcess)
+                {
+                    Traverse.Create(__instance).Field("m_plantedTime").SetValue(DateTime.MinValue.Ticks);
+                }
+            }
+        }
+
         [HarmonyPatch(typeof(Smelter), "GetDeltaTime")]
         public static class FastSmeltPatch
         {
@@ -822,16 +1158,14 @@ namespace ValheimMod
             }
         }
 
-        // FIXED: Replaced bad GetDeltaTime patch with this SlowUpdate patch for Fermenters
-        [HarmonyPatch(typeof(Fermenter), "SlowUpdate")]
-        public static class FastFermentPatch
+        [HarmonyPatch(typeof(Fermenter), "GetHoverText")]
+        public static class FermenterHoverPatch
         {
             static void Prefix(Fermenter __instance)
             {
                 if (ValheimModMenu.context.isFastProcess)
                 {
-                    // Force duration to 10 seconds so it finishes immediately
-                    Traverse.Create(__instance).Field("m_fermentationDuration").SetValue(10f);
+                    Traverse.Create(__instance).Field("m_fermentationDuration").SetValue(1f);
                 }
             }
         }
@@ -843,7 +1177,6 @@ namespace ValheimMod
             {
                 if (ValheimModMenu.context.isFastProcess)
                 {
-                    // FIXED: Use Reflection to access private m_items list
                     var traverse = Traverse.Create(__instance);
                     System.Collections.IList items = traverse.Field("m_items").GetValue<System.Collections.IList>();
 
@@ -851,7 +1184,6 @@ namespace ValheimMod
                     {
                         foreach (var item in items)
                         {
-                            // Modifying cookTime via reflection
                             var itemTraverse = Traverse.Create(item);
                             float current = itemTraverse.Field("m_cookTime").GetValue<float>();
                             itemTraverse.Field("m_cookTime").SetValue(current + (Time.deltaTime * 50f));

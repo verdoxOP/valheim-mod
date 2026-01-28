@@ -21,7 +21,7 @@ namespace ValheimMod
         private enum MenuMode { Spawner, Skills, World, Combat, Inventory, Recipes }
         private MenuMode currentMode = MenuMode.Spawner;
 
-        // --- TOGGLES ---
+        //toggle
         public bool isGodMode = false;
         public bool isInfStamina = false;
         public bool isInfEitr = false;
@@ -45,7 +45,7 @@ namespace ValheimMod
         public bool isSuperExplore = false;
         public bool isXpMultiplier = false;
 
-        // --- TIME & AMMO ---
+       
         public bool isInfAmmo = false;
         public bool isTimeFrozen = false;
         public float timeOfDay = 0.5f;
@@ -56,7 +56,7 @@ namespace ValheimMod
             { "GP_Moder", false }, { "GP_Yagluth", false }, { "GP_Queen", false }, { "GP_Fader", false }
         };
 
-        // --- COMBAT ---
+        //hax
         public bool isAimbot = false;
         public bool isPredictor = false;
         public float aimFov = 150f;
@@ -70,19 +70,19 @@ namespace ValheimMod
         private Vector2 espScrollPos;
         private bool espListPopulated = false;
 
-        // --- INVENTORY ---
+        //inv
         public static ItemDrop.ItemData LastHoveredItem = null;
         public bool isRecipeHelper = false;
         private string itemStackInput = "1";
 
-        // --- RECIPES ---
+        //recipes
         private Vector2 recipeScrollPos;
         private string recipeSearch = "";
         private bool showUnlockConfirmation = false;
         private bool showResetConfirmation = false;
         private List<string> recipeBackup = new List<string>();
 
-        // --- SPAWNER ---
+        //spawner
         private string selectedPrefabName = "SwordIron";
         private string amountInput = "1";
         private string searchInput = "";
@@ -90,7 +90,7 @@ namespace ValheimMod
         private Category currentCategory = Category.All;
         private Dictionary<Category, List<string>> categorizedItems = new Dictionary<Category, List<string>>();
 
-        // --- TELEPORT LOGIC ---
+      //tp
         private bool isTeleporting = false;
         private Vector3 teleportTargetXZ;
 
@@ -142,7 +142,7 @@ namespace ValheimMod
                 foreach (var b in behaviours) { if (b.GetType().Name.Contains("PostProcessLayer")) b.enabled = true; }
             }
 
-            // --- TIME CONTROL ---
+           
             if (isTimeFrozen && EnvMan.instance != null)
             {
                 EnvMan.instance.m_debugTimeOfDay = true;
@@ -158,7 +158,7 @@ namespace ValheimMod
                 Player p = Player.m_localPlayer;
                 var pTraverse = Traverse.Create(p);
 
-                // --- SMART TELEPORT LANDING ---
+         
                 if (isTeleporting)
                 {
                     float groundHeight;
@@ -211,7 +211,7 @@ namespace ValheimMod
                     if (ship != null)
                     {
                         var sTraverse = Traverse.Create(ship);
-                        // Check if we are driving
+                      
                         bool isDriving = false;
                         try
                         {
@@ -631,26 +631,26 @@ namespace ValheimMod
             MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, "VerdoxOP: Recipes Restored!");
         }
 
-        // --- FIXED: Mass Repair using GetComponent ---
+      
         void MassRepairNearby()
         {
             if (Player.m_localPlayer == null) return;
             int repaired = 0;
 
-            // Replaced obsolete FindObjectsOfType with FindObjectsByType
+         
             foreach (WearNTear w in UnityEngine.Object.FindObjectsByType<WearNTear>(FindObjectsSortMode.None))
             {
                 if (Vector3.Distance(w.transform.position, Player.m_localPlayer.transform.position) <= 20f)
                 {
-                    // Use GetComponent to get ZNetView instead of direct access
+                   
                     ZNetView nview = w.GetComponent<ZNetView>();
                     if (nview != null && nview.IsValid())
                     {
-                        // Check health via ZDO
+                    
                         float currentHealth = nview.GetZDO().GetFloat("health", w.m_health);
                         if (currentHealth < w.m_health)
                         {
-                            // Use Traverse to call SetHealth as a backup if method is private
+                       
                             Traverse.Create(w).Method("SetHealth", w.m_health).GetValue();
                             repaired++;
                         }
@@ -737,7 +737,7 @@ namespace ValheimMod
 
             GUILayout.Label("<b>Weather & Raids</b>");
             GUILayout.BeginHorizontal();
-            // FIXED: Use m_debugEnv
+         
             if (GUILayout.Button("CLEAR")) { if (EnvMan.instance) EnvMan.instance.m_debugEnv = "Clear"; }
             if (GUILayout.Button("RAIN")) { if (EnvMan.instance) EnvMan.instance.m_debugEnv = "Rain"; }
             if (GUILayout.Button("STORM")) { if (EnvMan.instance) EnvMan.instance.m_debugEnv = "ThunderStorm"; }
@@ -945,11 +945,11 @@ namespace ValheimMod
             GUILayout.Label("<b>Weapon Mods</b>");
             if (GUILayout.Button(isMagicBullet ? "Smart Arrow (Homing): <color=green>ON</color>" : "Smart Arrow (Homing): <color=red>OFF</color>")) isMagicBullet = !isMagicBullet;
             if (GUILayout.Button(isRapidAttack ? "Rapid Attack (Bow & Melee): <color=green>ON</color>" : "Rapid Attack (Bow & Melee): <color=red>OFF</color>")) isRapidAttack = !isRapidAttack;
-            // NEW: Infinite Ammo Toggle
+         
             if (GUILayout.Button(isInfAmmo ? "Infinite Ammo: <color=green>ON</color>" : "Infinite Ammo: <color=red>OFF</color>")) isInfAmmo = !isInfAmmo;
 
             GUILayout.Space(5);
-            // NEW: NUKE BUTTON
+            
             if (GUILayout.Button("KILL ALL ENEMIES (50m)")) KillAllNearby();
 
             GUILayout.Space(10);
@@ -1096,7 +1096,7 @@ namespace ValheimMod
             }
         }
 
-        // --- NEW: 10x XP PATCH ---
+
         [HarmonyPatch(typeof(Skills), "RaiseSkill")]
         public static class XpPatch
         {
@@ -1113,7 +1113,7 @@ namespace ValheimMod
             {
                 if (ValheimModMenu.context.isInfAmmo && item != null && item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.Ammo)
                 {
-                    return false; // Stop the ammo from being removed
+                    return false;
                 }
                 return true;
             }
@@ -1133,150 +1133,149 @@ namespace ValheimMod
         {
             static void Postfix(ref float __result)
             {
-                if (ValheimModMenu.context.isInfStability) __result = 1500f; // Max support
+                if (ValheimModMenu.context.isInfStability) __result = 1500f;
             }
-        }
 
-        [HarmonyPatch(typeof(Plant), "GetHoverText")]
-        public static class FastPlantPatch
-        {
-            static void Prefix(Plant __instance)
+            [HarmonyPatch(typeof(Plant), "GetHoverText")]
+            public static class FastPlantPatch
             {
-                if (ValheimModMenu.context.isFastProcess)
+                static void Prefix(Plant __instance)
                 {
-                    Traverse.Create(__instance).Field("m_plantedTime").SetValue(DateTime.MinValue.Ticks);
-                }
-            }
-        }
-
-        [HarmonyPatch(typeof(Smelter), "GetDeltaTime")]
-        public static class FastSmeltPatch
-        {
-            static void Postfix(ref double __result)
-            {
-                if (ValheimModMenu.context.isFastProcess) __result *= 50.0;
-            }
-        }
-
-        [HarmonyPatch(typeof(Fermenter), "GetHoverText")]
-        public static class FermenterHoverPatch
-        {
-            static void Prefix(Fermenter __instance)
-            {
-                if (ValheimModMenu.context.isFastProcess)
-                {
-                    Traverse.Create(__instance).Field("m_fermentationDuration").SetValue(1f);
-                }
-            }
-        }
-
-        [HarmonyPatch(typeof(CookingStation), "UpdateCooking")]
-        public static class FastCookPatch
-        {
-            static void Prefix(CookingStation __instance)
-            {
-                if (ValheimModMenu.context.isFastProcess)
-                {
-                    var traverse = Traverse.Create(__instance);
-                    System.Collections.IList items = traverse.Field("m_items").GetValue<System.Collections.IList>();
-
-                    if (items != null)
+                    if (ValheimModMenu.context.isFastProcess)
                     {
-                        foreach (var item in items)
-                        {
-                            var itemTraverse = Traverse.Create(item);
-                            float current = itemTraverse.Field("m_cookTime").GetValue<float>();
-                            itemTraverse.Field("m_cookTime").SetValue(current + (Time.deltaTime * 50f));
-                        }
+                        Traverse.Create(__instance).Field("m_plantedTime").SetValue(DateTime.MinValue.Ticks);
                     }
                 }
             }
-        }
 
-        [HarmonyPatch(typeof(InventoryGrid), "CreateItemTooltip")]
-        public static class TooltipPatch
-        {
-            static void Postfix(ItemDrop.ItemData item, GameObject tooltip)
+            [HarmonyPatch(typeof(Smelter), "GetDeltaTime")]
+            public static class FastSmeltPatch
             {
-                try
+                static void Postfix(ref double __result)
                 {
-                    if (ValheimModMenu.context.isRecipeHelper && item != null && tooltip != null && ObjectDB.instance != null)
+                    if (ValheimModMenu.context.isFastProcess) __result *= 50.0;
+                }
+            }
+
+            [HarmonyPatch(typeof(Fermenter), "GetHoverText")]
+            public static class FermenterHoverPatch
+            {
+                static void Prefix(Fermenter __instance)
+                {
+                    if (ValheimModMenu.context.isFastProcess)
                     {
-                        Recipe r = ObjectDB.instance.GetRecipe(item);
-                        if (r != null)
+                        Traverse.Create(__instance).Field("m_fermentationDuration").SetValue(1f);
+                    }
+                }
+            }
+
+            [HarmonyPatch(typeof(CookingStation), "UpdateCooking")]
+            public static class FastCookPatch
+            {
+                static void Prefix(CookingStation __instance)
+                {
+                    if (ValheimModMenu.context.isFastProcess)
+                    {
+                        var traverse = Traverse.Create(__instance);
+                        System.Collections.IList items = traverse.Field("m_items").GetValue<System.Collections.IList>();
+
+                        if (items != null)
                         {
-                            Text textComp = tooltip.transform.Find("Text")?.GetComponent<Text>();
-                            if (textComp != null)
+                            foreach (var item in items)
                             {
-                                string addedInfo = "\n\n<color=orange><b>-- RECIPE --</b></color>";
-                                foreach (var res in r.m_resources)
-                                {
-                                    addedInfo += $"\n<color=yellow>{res.m_resItem.m_itemData.m_shared.m_name}</color>: <color=white>{res.m_amount}</color>";
-                                }
-                                if (r.m_craftingStation != null)
-                                {
-                                    addedInfo += $"\nStation: <color=cyan>{r.m_craftingStation.m_name}</color> (Lvl {r.m_minStationLevel})";
-                                }
-                                textComp.text += addedInfo;
+                                var itemTraverse = Traverse.Create(item);
+                                float current = itemTraverse.Field("m_cookTime").GetValue<float>();
+                                itemTraverse.Field("m_cookTime").SetValue(current + (Time.deltaTime * 50f));
                             }
                         }
                     }
                 }
-                catch { }
             }
-        }
 
-        [HarmonyPatch(typeof(Player), "CheckCanRemovePiece")]
-        public static class RemovePiecePatch { static bool Prefix(ref bool __result) { if (ValheimModMenu.context.isNoCostBuild) { __result = true; return false; } return true; } }
-
-        [HarmonyPatch(typeof(Location), "IsInsideNoBuildLocation")]
-        public static class NoBuildLocPatch { static bool Prefix(ref bool __result) { if (ValheimModMenu.context.isNoCostBuild) { __result = false; return false; } return true; } }
-
-        [HarmonyPatch(typeof(PrivateArea), "CheckAccess")]
-        public static class WardPatch { static bool Prefix(ref bool __result) { if (ValheimModMenu.context.isNoCostBuild) { __result = true; return false; } return true; } }
-
-        [HarmonyPatch(typeof(Character), "RPC_Damage")]
-        public static class GodModePatch { static bool Prefix(Character __instance) { if (__instance == Player.m_localPlayer && ValheimModMenu.context.isGodMode) return false; return true; } }
-
-        [HarmonyPatch(typeof(Projectile), "Setup")]
-        public static class MagicBulletPatch { static void Postfix(Projectile __instance, Vector3 velocity) { if (ValheimModMenu.context.isMagicBullet && Player.m_localPlayer != null) { Character target = ValheimModMenu.context.GetBestTarget(); if (target != null) { Vector3 direction = (target.GetCenterPoint() - __instance.transform.position).normalized; float speed = velocity.magnitude; Traverse.Create(__instance).Field("m_vel").SetValue(direction * speed); __instance.m_gravity = 0f; } } } }
-
-        [HarmonyPatch(typeof(Projectile), "FixedUpdate")]
-        public static class HomingArrowPatch
-        {
-            static void Postfix(Projectile __instance)
+            [HarmonyPatch(typeof(InventoryGrid), "CreateItemTooltip")]
+            public static class TooltipPatch
             {
-                if (ValheimModMenu.context.isMagicBullet && Player.m_localPlayer != null)
+                static void Postfix(ItemDrop.ItemData item, GameObject tooltip)
                 {
-                    var traverse = Traverse.Create(__instance);
-                    Vector3 velocity = traverse.Field("m_vel").GetValue<Vector3>();
-                    Character target = ValheimModMenu.GetClosestEnemy(__instance.transform.position, 50f);
-
-                    if (target != null)
+                    try
                     {
-                        Vector3 targetPos = target.GetCenterPoint();
-                        Vector3 currentPos = __instance.transform.position;
-                        Vector3 dirToTarget = (targetPos - currentPos).normalized;
-                        float distToTarget = Vector3.Distance(currentPos, targetPos);
-
-                        int layerMask = LayerMask.GetMask("Default", "static_solid", "terrain", "piece");
-
-                        if (Physics.Raycast(currentPos, dirToTarget, out RaycastHit hit, distToTarget, layerMask))
+                        if (ValheimModMenu.context.isRecipeHelper && item != null && tooltip != null && ObjectDB.instance != null)
                         {
-                            Vector3 avoidance = hit.normal + Vector3.up;
-                            dirToTarget = Vector3.Lerp(dirToTarget, avoidance, 0.6f).normalized;
+                            Recipe r = ObjectDB.instance.GetRecipe(item);
+                            if (r != null)
+                            {
+                                Text textComp = tooltip.transform.Find("Text")?.GetComponent<Text>();
+                                if (textComp != null)
+                                {
+                                    string addedInfo = "\n\n<color=orange><b>-- RECIPE --</b></color>";
+                                    foreach (var res in r.m_resources)
+                                    {
+                                        addedInfo += $"\n<color=yellow>{res.m_resItem.m_itemData.m_shared.m_name}</color>: <color=white>{res.m_amount}</color>";
+                                    }
+                                    if (r.m_craftingStation != null)
+                                    {
+                                        addedInfo += $"\nStation: <color=cyan>{r.m_craftingStation.m_name}</color> (Lvl {r.m_minStationLevel})";
+                                    }
+                                    textComp.text += addedInfo;
+                                }
+                            }
                         }
+                    }
+                    catch { }
+                }
+            }
 
-                        float speed = velocity.magnitude;
-                        Vector3 newVelocity = Vector3.RotateTowards(velocity, dirToTarget * speed, 20f * Time.fixedDeltaTime, 0f);
+            [HarmonyPatch(typeof(Player), "CheckCanRemovePiece")]
+            public static class RemovePiecePatch { static bool Prefix(ref bool __result) { if (ValheimModMenu.context.isNoCostBuild) { __result = true; return false; } return true; } }
 
-                        traverse.Field("m_vel").SetValue(newVelocity);
-                        __instance.transform.rotation = Quaternion.LookRotation(newVelocity);
+            [HarmonyPatch(typeof(Location), "IsInsideNoBuildLocation")]
+            public static class NoBuildLocPatch { static bool Prefix(ref bool __result) { if (ValheimModMenu.context.isNoCostBuild) { __result = false; return false; } return true; } }
+
+            [HarmonyPatch(typeof(PrivateArea), "CheckAccess")]
+            public static class WardPatch { static bool Prefix(ref bool __result) { if (ValheimModMenu.context.isNoCostBuild) { __result = true; return false; } return true; } }
+
+            [HarmonyPatch(typeof(Character), "RPC_Damage")]
+            public static class GodModePatch { static bool Prefix(Character __instance) { if (__instance == Player.m_localPlayer && ValheimModMenu.context.isGodMode) return false; return true; } }
+
+            [HarmonyPatch(typeof(Projectile), "Setup")]
+            public static class MagicBulletPatch { static void Postfix(Projectile __instance, Vector3 velocity) { if (ValheimModMenu.context.isMagicBullet && Player.m_localPlayer != null) { Character target = ValheimModMenu.context.GetBestTarget(); if (target != null) { Vector3 direction = (target.GetCenterPoint() - __instance.transform.position).normalized; float speed = velocity.magnitude; Traverse.Create(__instance).Field("m_vel").SetValue(direction * speed); __instance.m_gravity = 0f; } } } }
+
+            [HarmonyPatch(typeof(Projectile), "FixedUpdate")]
+            public static class HomingArrowPatch
+            {
+                static void Postfix(Projectile __instance)
+                {
+                    if (ValheimModMenu.context.isMagicBullet && Player.m_localPlayer != null)
+                    {
+                        var traverse = Traverse.Create(__instance);
+                        Vector3 velocity = traverse.Field("m_vel").GetValue<Vector3>();
+                        Character target = ValheimModMenu.GetClosestEnemy(__instance.transform.position, 50f);
+
+                        if (target != null)
+                        {
+                            Vector3 targetPos = target.GetCenterPoint();
+                            Vector3 currentPos = __instance.transform.position;
+                            Vector3 dirToTarget = (targetPos - currentPos).normalized;
+                            float distToTarget = Vector3.Distance(currentPos, targetPos);
+
+                            int layerMask = LayerMask.GetMask("Default", "static_solid", "terrain", "piece");
+
+                            if (Physics.Raycast(currentPos, dirToTarget, out RaycastHit hit, distToTarget, layerMask))
+                            {
+                                Vector3 avoidance = hit.normal + Vector3.up;
+                                dirToTarget = Vector3.Lerp(dirToTarget, avoidance, 0.6f).normalized;
+                            }
+
+                            float speed = velocity.magnitude;
+                            Vector3 newVelocity = Vector3.RotateTowards(velocity, dirToTarget * speed, 20f * Time.fixedDeltaTime, 0f);
+
+                            traverse.Field("m_vel").SetValue(newVelocity);
+                            __instance.transform.rotation = Quaternion.LookRotation(newVelocity);
+                        }
                     }
                 }
             }
         }
-
         [HarmonyPatch(typeof(MineRock5), "RPC_Damage")]
         public static class InstaMinePatch1 { static void Prefix(MineRock5 __instance, HitData hit) { if (ValheimModMenu.context.isInstaMine && hit.GetAttacker() == Player.m_localPlayer) ModifyHit(hit); } }
         [HarmonyPatch(typeof(TreeBase), "RPC_Damage")]
